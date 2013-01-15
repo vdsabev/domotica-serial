@@ -19,14 +19,13 @@ io.sockets.on('connection', function (socket) {
     });
 });
 
-var cleanData = '';
-var readData = '';
+var buffer = '';
 serialPort.on('data', function (data) {
-  readData += data.toString();
-  if (readData.indexOf('{') !== -1 && readData.indexOf('}') !== -1) {
-    cleanData = readData.substring(readData.indexOf('{') + 1, readData.indexOf('}'));
-    readData = '';
-    io.sockets.emit('message', cleanData);
-    console.log(cleanData);
+  buffer += data.toString();
+  if (buffer.indexOf('{') >= 0 && buffer.indexOf('}') >= 0) {
+    var message = buffer.substring(buffer.indexOf('{') + 1, buffer.indexOf('}'));
+    buffer = '';
+    io.sockets.emit('message', message);
+    console.log(message);
 	}
 });
