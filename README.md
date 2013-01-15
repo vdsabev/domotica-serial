@@ -1,2 +1,2 @@
-domotica-serial
+Domotica Serial
 ===============

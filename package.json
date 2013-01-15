@@ -1,0 +1,11 @@
+{
+  "name": "domotica",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "serialport": "1.0.8",
+    "socket.io": "0.9.13"
+  },
+  "devDependencies": {
+  }
+}
