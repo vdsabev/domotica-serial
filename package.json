@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "lodash": "1.0.0-rc.3",
     "serialport": "1.0.8",
     "socket.io": "0.9.13"
   },
