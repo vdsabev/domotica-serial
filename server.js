@@ -35,7 +35,8 @@ socket.on('disconnect', function () {
 });
 
 // Initialize Serial Port
-var serialPort = new require('serialport').SerialPort(process.env.serial, {
+var SerialPort = require('serialport').SerialPort;
+var serialPort = new SerialPort(process.env.serial, {
   baudRate: 9600,
   dataBits: 8,
   parity: 'none',
