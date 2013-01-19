@@ -3,9 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "commander": "1.1.1",
     "lodash": "1.0.0-rc.3",
     "serialport": "1.0.8",
-    "socket.io": "0.9.13"
+    "socket.io-client": "0.9.11"
   },
   "devDependencies": {
   }

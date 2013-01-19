@@ -1,9 +1,41 @@
-require('./env');
-
+// Setup Environment
 var _ = require('lodash'),
-    SerialPort  = require('serialport').SerialPort;
+    program = require('commander');
 
-var serialPort = new SerialPort(process.env.PORT, {
+// Set Default Values
+_.defaults(process.env, {
+  TZ: 'UTC',
+  host: 'localhost',
+  port: 8000,
+  serial: 'COM4'
+});
+
+// Parse Command Line Arguments
+program.version('0.0.1');
+var options = [
+  { short: 'h', long: 'host', description: 'host name' },
+  { short: 'p', long: 'port', description: 'host port' },
+  { short: 's', long: 'serial', description: 'serial port name (e.g. COM4)' }
+];
+options.forEach(function (option) {
+  program.option('-' + option.short + ' --' + option.long, option.description);
+});
+program.parse(process.argv);
+
+// Command Line Arguments take precedence
+process.env = _.defaults(_.pick(program, _.pluck(options, 'long')), process.env);
+
+// Initialize Server
+var socket = require('socket.io-client').connect(process.env.host, { port: process.env.port });
+socket.on('connect', function () {
+  console.log('socket connected');
+});
+socket.on('disconnect', function () {
+  console.log('socket disconnected');
+});
+
+// Initialize Serial Port
+var serialPort = new require('serialport').SerialPort(process.env.serial, {
   baudRate: 9600,
   dataBits: 8,
   parity: 'none',
@@ -11,16 +43,7 @@ var serialPort = new SerialPort(process.env.PORT, {
   flowControl: false
 });
 
-var io = require('socket.io').listen(8000);
-io.sockets.on('connection', function (socket) {
-    socket.on('message', function (message) {
-      console.log(message);
-    });
-    socket.on('disconnect', function () {
-      console.log('disconnected');
-    });
-});
-
+// Process Data
 var buffer = '';
 serialPort.on('data', function (data) {
   buffer += data.toString();
@@ -36,7 +59,7 @@ serialPort.on('data', function (data) {
         return;
       }
     }
-    io.sockets.emit('message', message);
+    socket.emit('message', message);
     console.log(message);
   }
 });
