@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "async": "0.1.22",
     "commander": "1.1.1",
     "lodash": "1.0.0-rc.3",
     "serialport": "1.0.8",
