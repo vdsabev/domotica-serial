@@ -1,59 +1,71 @@
 // Setup Environment
 var _ = require('lodash'),
     async = require('async'),
-    program = require('commander'),
-    path = require('path');
+    program = require('commander');
 
 // Set Default Values
-_.defaults(process.env, {
-  TZ: 'UTC'
-});
+_.defaults(process.env, { TZ: 'UTC', fake: false });
 
 // Parse Command Line Arguments
 program.version('0.0.1');
 var options = [
-  { short: 'h', long: 'host', description: 'host name' },
-  { short: 'p', long: 'port', description: 'serial port name (e.g. COM4)' },
-  { short: 's', long: 'system', description: 'system name' },
-  { short: 'k', long: 'key', description: 'system key' }
+  { short: 'H', long: 'host', args: '<host>', description: 'host name' },
+  { short: 'P', long: 'port', args: '<port>', description: 'serial port name (e.g. COM4)' },
+  { short: 'S', long: 'system', args: '<system>', description: 'system name' },
+  { short: 'K', long: 'key', args: '<key>', description: 'system key' },
+  { short: 'F', long: 'fake', description: 'fake data by sending random numbers' }
 ];
 options.forEach(function (option) {
-  program.option('-' + option.short + ' --' + option.long, option.description);
+  program.option(
+    '-' + option.short +
+    (option.long ? ' --' + option.long : '') +
+    (option.args ? ' ' + option.args : ''),
+    option.description
+  );
 });
 program.parse(process.argv);
 
 // Command Line Arguments take precedence
 process.env = _.defaults(_.pick(program, _.pluck(options, 'long')), process.env);
 
-// Prompts are our last means of escape
+// Prompts are the last means of setting environment variables
 var defaults = {
   host: 'http://localhost:8000',
   port: 'COM4'
 };
 
 async.series(
-_.map(options, function (option) {
-  return function (next) {
-    if (process.env[option]) next();
+  _.map(options, function (option) {
+    return function (next) {
+      if (process.env[option.long]) return next();
 
-    // Option was neither in the command line arguments nor in a configuration file
-    program.prompt(option.description + ': ', function (result) {
-      process.env[option] = result ? result : defaults[option];
-      next();
-    });
-  };
-}), function (error) {
-  if (error) {
-    console.error(error);
-    process.exit(1);
+      // Option was neither in the command line arguments nor in a configuration file
+      var action = 'prompt',
+          args = [option.description + ': '];
+      if (option.long === 'key') {
+        action = 'password';
+        args.push('*');
+      }
+      args.push(function (result) {
+        process.env[option.long] = (result ? result : defaults[option.long]);
+        return next();
+      });
+      program[action].apply(program, args);
+    };
+  }),
+  function (error) {
+    if (error) {
+      console.error(error);
+      process.exit(1);
+    }
+
+    connect();
   }
-
-  connect();
-});
+);
 
 function connect() {
   // Initialize Server
-  var server = process.env.host + '/?system' + process.env.system + '&key=' + process.env.key;
+  var server = process.env.host + '/?system=' + process.env.system + '&key=' + process.env.key;
   var socket = require('socket.io-client').connect(server);
   socket.on('connect', function () {
     console.log('socket connected');
