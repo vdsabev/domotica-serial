@@ -1,5 +1,5 @@
 {
-  "name": "domotica",
+  "name": "domotica-serial",
   "version": "0.0.1",
   "private": true,
   "dependencies": {

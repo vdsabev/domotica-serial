@@ -3,16 +3,16 @@ var _ = require('lodash'),
     async = require('async'),
     program = require('commander');
 
-// Set Default Values
+// Pre-set environment variables take precedence
 _.defaults(process.env, { TZ: 'UTC', fake: false });
 
 // Parse Command Line Arguments
 program.version('0.0.1');
 var options = [
-  { short: 'H', long: 'host', args: '<host>', description: 'host name' },
-  { short: 'P', long: 'port', args: '<port>', description: 'serial port name (e.g. COM4)' },
-  { short: 'S', long: 'system', args: '<system>', description: 'system name' },
-  { short: 'K', long: 'key', args: '<key>', description: 'system key' },
+  { short: 'H', long: 'host', args: '<name>', description: 'host name' },
+  { short: 'S', long: 'serial', args: '<port>', description: 'serial port name (e.g. COM4)' },
+  { short: 'A', long: 'account', args: '<account>', description: 'username or email' },
+  { short: 'P', long: 'password', args: '<password>', description: 'password' },
   { short: 'F', long: 'fake', description: 'fake data by sending random numbers' }
 ];
 options.forEach(function (option) {
@@ -26,12 +26,12 @@ options.forEach(function (option) {
 program.parse(process.argv);
 
 // Command Line Arguments take precedence
-process.env = _.defaults(_.pick(program, _.pluck(options, 'long')), process.env);
+_.extend(process.env, _.pick(program, _.pluck(options, 'long')));
 
 // Prompts are the last means of setting environment variables
 var defaults = {
-  host: 'http://localhost:8000',
-  port: 'COM4'
+  host: 'http://localhost:3000',
+  serial: 'COM4'
 };
 
 async.series(
@@ -40,9 +40,9 @@ async.series(
       if (process.env[option.long]) return next();
 
       // Option was neither in the command line arguments nor in a configuration file
-      var action = 'prompt',
-          args = [option.description + ': '];
-      if (option.long === 'key') {
+      var action = 'prompt';
+      var args = [option.description + ': '];
+      if (option.long === 'password') {
         action = 'password';
         args.push('*');
       }
@@ -65,15 +65,24 @@ async.series(
 
 function connect() {
   // Initialize Server
-  var server = process.env.host + '/?system=' + process.env.system + '&key=' + process.env.key;
-  var socket = require('socket.io-client').connect(server);
+  var socket = require('socket.io-client').connect(process.env.host);
   socket.on('connect', function () {
     console.log('socket connected');
   });
   socket.on('disconnect', function () {
     console.log('socket disconnected');
   });
+  socket.emit('session.login', { account: process.env.account, password: process.env.password }, function (error, data) {
+    if (error) {
+      console.error(error);
+      process.exit(1);
+    }
 
+    initSerialPort(socket);
+  });
+}
+
+function initSerialPort(socket) {
   // Initialize Serial Port
   var SerialPort = require('serialport').SerialPort;
   var serialPort = new SerialPort(process.env.serial, {
