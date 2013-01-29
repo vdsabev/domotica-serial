@@ -12,7 +12,7 @@ var options = [
   { short: 'H', long: 'host', args: '<name>', description: 'host name' },
   { short: 'S', long: 'serial', args: '<port>', description: 'serial port name (e.g. COM4)' },
   { short: 'A', long: 'account', args: '<account>', description: 'username or email' },
-  { short: 'P', long: 'password', args: '<password>', description: 'password' },
+  { short: 'P', long: 'pass', args: '<password>', description: 'password' },
   { short: 'F', long: 'fake', description: 'fake data by sending random numbers' }
 ];
 options.forEach(function (option) {
@@ -35,19 +35,19 @@ var defaults = {
 };
 
 async.series(
-  _.map(options, function (option) {
+  _.map(['host', 'serial', 'account', 'pass'], function (option) {
     return function (next) {
-      if (process.env[option.long]) return next();
+      if (process.env[option]) return next();
 
       // Option was neither in the command line arguments nor in a configuration file
       var action = 'prompt';
-      var args = [option.description + ': '];
-      if (option.long === 'password') {
+      var args = [option + ': '];
+      if (option === 'pass') {
         action = 'password';
         args.push('*');
       }
       args.push(function (result) {
-        process.env[option.long] = (result ? result : defaults[option.long]);
+        process.env[option] = (result ? result : defaults[option]);
         return next();
       });
       program[action].apply(program, args);
@@ -72,7 +72,8 @@ function connect() {
   socket.on('disconnect', function () {
     console.log('socket disconnected');
   });
-  socket.emit('session.login', { account: process.env.account, password: process.env.password }, function (error, data) {
+
+  socket.emit('session.login', { account: process.env.account, password: process.env.pass }, function (error, data) {
     if (error) {
       console.error(error);
       process.exit(1);
