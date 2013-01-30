@@ -68,18 +68,18 @@ function connect() {
   var socket = require('socket.io-client').connect(process.env.host);
   socket.on('connect', function () {
     console.log('socket connected');
+
+    socket.emit('session.login', { account: process.env.account, password: process.env.pass }, function (error, data) {
+      if (error) {
+        console.error(error);
+        process.exit(1);
+      }
+
+      initSerialPort(socket);
+    });
   });
   socket.on('disconnect', function () {
     console.log('socket disconnected');
-  });
-
-  socket.emit('session.login', { account: process.env.account, password: process.env.pass }, function (error, data) {
-    if (error) {
-      console.error(error);
-      process.exit(1);
-    }
-
-    initSerialPort(socket);
   });
 }
 
