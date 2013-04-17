@@ -11,7 +11,7 @@ program.version('0.0.1');
 var options = [
   { short: 'H', long: 'host', args: '<name>', description: 'host name' },
   { short: 'S', long: 'serial', args: '<port>', description: 'serial port name (e.g. COM4)' },
-  { short: 'A', long: 'account', args: '<account>', description: 'username or email' },
+  { short: 'E', long: 'email', args: '<email>', description: 'email address' },
   { short: 'P', long: 'pass', args: '<password>', description: 'password' },
   { short: 'F', long: 'fake', description: 'fake data by sending random numbers' }
 ];
@@ -35,7 +35,7 @@ var defaults = {
 };
 
 async.series(
-  _.map(['host', 'serial', 'account', 'pass'], function (option) {
+  _.map(['host', 'serial', 'email', 'pass'], function (option) {
     return function (next) {
       if (process.env[option]) return next();
 
@@ -69,7 +69,7 @@ function connect() {
   socket.on('connect', function () {
     console.log('socket connected');
 
-    socket.emit('session.login', { account: process.env.account, password: process.env.pass }, function (error, data) {
+    socket.emit('session.login', { email: process.env.email, password: process.env.pass }, function (error, data) {
       if (error) {
         console.error(error);
         process.exit(1);
