@@ -3,11 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "async": "0.1.22",
+    "async": "0.2.9",
     "commander": "1.1.1",
-    "lodash": "1.0.0-rc.3",
+    "lodash": "2.0.0",
     "serialport": "1.0.8",
-    "socket.io-client": "0.9.11"
+    "socket.io-client": "0.9.16"
   },
   "devDependencies": {
   }

@@ -1,10 +1,9 @@
-// Setup Environment
 var _ = require('lodash'),
     async = require('async'),
     program = require('commander');
 
 // Pre-set environment variables take precedence
-_.defaults(process.env, { TZ: 'UTC', fake: false });
+var env = _.defaults(process.env, { TZ: 'UTC' });
 
 // Parse Command Line Arguments
 program.version('0.0.1');
@@ -12,8 +11,7 @@ var options = [
   { short: 'H', long: 'host', args: '<name>', description: 'host name' },
   { short: 'S', long: 'serial', args: '<port>', description: 'serial port name (e.g. COM4)' },
   { short: 'E', long: 'email', args: '<email>', description: 'email address' },
-  { short: 'P', long: 'pass', args: '<password>', description: 'password' },
-  { short: 'F', long: 'fake', description: 'fake data by sending random numbers' }
+  { short: 'P', long: 'pass', args: '<password>', description: 'password' } // Using "password" for the option name does not work
 ];
 options.forEach(function (option) {
   program.option(
@@ -26,7 +24,7 @@ options.forEach(function (option) {
 program.parse(process.argv);
 
 // Command Line Arguments take precedence
-_.extend(process.env, _.pick(program, _.pluck(options, 'long')));
+_.extend(env, _.pick(program, _.pluck(options, 'long')));
 
 // Prompts are the last means of setting environment variables
 var defaults = {
@@ -37,7 +35,7 @@ var defaults = {
 async.series(
   _.map(['host', 'serial', 'email', 'pass'], function (option) {
     return function (next) {
-      if (process.env[option]) return next();
+      if (env[option]) return next();
 
       // Option was neither in the command line arguments nor in a configuration file
       var action = 'prompt';
@@ -47,34 +45,27 @@ async.series(
         args.push('*');
       }
       args.push(function (result) {
-        process.env[option] = (result ? result : defaults[option]);
+        env[option] = (result ? result : defaults[option]);
         return next();
       });
       program[action].apply(program, args);
     };
   }),
   function (error) {
-    if (error) {
-      console.error(error);
-      process.exit(1);
-    }
-
+    next(error);
     connect();
   }
 );
 
 function connect() {
   // Initialize Server
-  var socket = require('socket.io-client').connect(process.env.host);
+  var socket = require('socket.io-client').connect(env.host);
+  socket.on('error', next);
   socket.on('connect', function () {
     console.log('socket connected');
 
-    socket.emit('session.login', { email: process.env.email, password: process.env.pass }, function (error, data) {
-      if (error) {
-        console.error(error);
-        process.exit(1);
-      }
-
+    socket.emit('create:session', { data: { email: env.email, password: env.pass } }, function (error, data) {
+      next(error);
       initSerialPort(socket);
     });
   });
@@ -85,14 +76,19 @@ function connect() {
 
 function initSerialPort(socket) {
   // Initialize Serial Port
+  console.log('initializing serial port')
   var SerialPort = require('serialport').SerialPort;
-  var serialPort = new SerialPort(process.env.serial, {
+  var serialPort = new SerialPort(env.serial, {
     baudRate: 9600,
     dataBits: 8,
     parity: 'none',
     stopBits: 1,
     flowControl: false
   });
+
+  serialPort.on('error', next);
+
+  console.log('serial port initialized');
 
   // Process Data
   var buffer = '';
@@ -110,8 +106,15 @@ function initSerialPort(socket) {
           return;
         }
       }
-      socket.emit('message', message);
+      socket.emit('message', { data: message });
       console.log(message);
     }
   });
+}
+
+function next(error) {
+  if (error) {
+    console.error(error.stack || error);
+    process.exit(1);
+  }
 }
