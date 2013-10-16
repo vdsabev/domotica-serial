@@ -1,17 +1,20 @@
 var _ = require('lodash'),
     async = require('async'),
-    program = require('commander');
+    io = require('socket.io-client'),
+    program = require('commander'),
+    serialport = require('serialport'),
+    Table = require('cli-table');
 
 // Pre-set environment variables take precedence
-var env = _.defaults(process.env, { TZ: 'UTC' });
+var env = _.defaults({}, process.env, { TZ: 'UTC' });
 
 // Parse Command Line Arguments
 program.version('0.0.1');
 var options = [
+  { short: 'S', long: 'serial', args: '<ports>', description: 'serial port names (comma-separated, e.g. COM4,COM5)' },
   { short: 'H', long: 'host', args: '<name>', description: 'host name' },
-  { short: 'S', long: 'serial', args: '<port>', description: 'serial port name (e.g. COM4)' },
-  { short: 'E', long: 'email', args: '<email>', description: 'email address' },
-  { short: 'P', long: 'pass', args: '<password>', description: 'password' } // Using "password" for the option name does not work
+  { short: 'E', long: 'email', args: '<address>', description: 'email address' },
+  { short: 'P', long: 'pass', args: '<word>', description: 'password' } // Using "password" for the option name does not work
 ];
 options.forEach(function (option) {
   program.option(
@@ -28,88 +31,125 @@ _.extend(env, _.pick(program, _.pluck(options, 'long')));
 
 // Prompts are the last means of setting environment variables
 var defaults = {
-  host: 'http://localhost:3000',
-  serial: 'COM4'
+  serial: 'COM4',
+  host: 'http://localhost:3000'
+};
+
+// Utility functions
+String.prototype.repeat = function (count) {
+  return new Array(count + 1).join(this);
 };
 
 async.series(
-  _.map(['host', 'serial', 'email', 'pass'], function (option) {
+  _.map(_.pluck(options, 'long'), function (option) {
     return function (next) {
-      if (env[option]) return next();
+      if (env[option]) return next(); // Option was either in the command line arguments or in a configuration file
 
-      // Option was neither in the command line arguments nor in a configuration file
-      var action = 'prompt';
-      var args = [option + ': '];
-      if (option === 'pass') {
-        action = 'password';
-        args.push('*');
+      if (option === 'serial') {
+        serialport.list(function (error, ports) {
+          if (error) return next(error);
+          if (ports.length === 0) return next('no serial ports detected!');
+
+          console.log('%d serial ports detected:', ports.length);
+          var table = new Table({ head: ['Name', 'PnP ID', 'Manufacturer'] });
+          _.each(ports, function (port) {
+            table.push([port.comName, port.pnpId, port.manufacturer]);
+          });
+          console.log(table.toString());
+          prompt();
+        });
       }
-      args.push(function (result) {
-        env[option] = (result ? result : defaults[option]);
-        return next();
-      });
-      program[action].apply(program, args);
+      else {
+        prompt();
+      }
+
+      function prompt() {
+        var action = 'prompt';
+        var args = [option + ': '];
+        if (option === 'pass') {
+          action = 'password';
+          args.push('*');
+        }
+        args.push(function (result) {
+          env[option] = (result ? result : defaults[option]);
+          return next();
+        });
+        program[action].apply(program, args);
+      }
     };
   }),
   function (error) {
     next(error);
+
+    // Parse options
+    _.each(_.pluck(options, 'long'), function (option) {
+      if (option === 'serial') {
+        env[option] = env[option].split('\s*,\s*');
+      }
+    });
+
     connect();
   }
 );
 
 function connect() {
   // Initialize Server
-  var socket = require('socket.io-client').connect(env.host);
-  socket.on('error', next);
-  socket.on('connect', function () {
-    console.log('socket connected');
-
-    socket.emit('create:session', { data: { email: env.email, password: env.pass } }, function (error, data) {
+  console.log('connecting to %s...', env.host);
+  var server = io.connect(env.host);
+  server.on('error', next);
+  server.on('connect', function () {
+    console.log('...connected to %s...', env.host);
+    server.emit('create:session', { data: { email: env.email, password: env.pass } }, function (error, data) {
       next(error);
-      initSerialPort(socket);
+      initSerialPorts(server);
     });
   });
-  socket.on('disconnect', function () {
-    console.log('socket disconnected');
+  server.on('disconnect', function () {
+    console.log('...disconnected from %s', env.host);
   });
 }
 
-function initSerialPort(socket) {
+function initSerialPorts(server) {
   // Initialize Serial Port
-  console.log('initializing serial port')
-  var SerialPort = require('serialport').SerialPort;
-  var serialPort = new SerialPort(env.serial, {
-    baudRate: 9600,
-    dataBits: 8,
-    parity: 'none',
-    stopBits: 1,
-    flowControl: false
-  });
+  console.log('initializing serial ports...')
+  _.each(env.serial, function (portName) {
+    console.log('initializing %s...', portName)
 
-  serialPort.on('error', next);
+    var port = new serialport.SerialPort(portName, {
+      baudRate: 9600,
+      dataBits: 8,
+      parity: 'none',
+      stopBits: 1,
+      flowControl: false
+    });
 
-  console.log('serial port initialized');
+    port.on('error', next);
 
-  // Process Data
-  var buffer = '';
-  serialPort.on('data', function (data) {
-    buffer += data.toString();
-    var startIndex = buffer.indexOf('['),
-        endIndex = buffer.indexOf(']');
-    if (startIndex >= 0 && endIndex >= 0) {
-      var message = buffer.substring(startIndex + 1, endIndex).split(',');
-      buffer = buffer.substring(endIndex + 1);
-      for (var i = message.length - 1; i >= 0; i--) {
-        message[i] = parseInt(message[i]);
-        if (isNaN(message[i])) {
-          console.error('Invalid data: ', message);
-          return;
+    console.log('...initialized %s', portName);
+
+    // Process Data
+    var buffer = '';
+    port.on('data', function (data) {
+      buffer += data.toString();
+      var startIndex = buffer.indexOf('['),
+          endIndex = buffer.indexOf(']');
+      if (startIndex >= 0 && endIndex >= 0) {
+        var message = buffer.substring(startIndex + 1, endIndex).split(',');
+        buffer = buffer.substring(endIndex + 1);
+        for (var i = message.length - 1; i >= 0; i--) {
+          message[i] = parseInt(message[i]);
+          if (isNaN(message[i])) {
+            console.error('invalid data: ', message);
+            return;
+          }
         }
+        server.emit('message', { data: message });
+        console.log(portName + ':', message);
       }
-      socket.emit('message', { data: message });
-      console.log(message);
-    }
+    });
   });
+
+  console.log('...initialized serial ports');
 }
 
 function next(error) {

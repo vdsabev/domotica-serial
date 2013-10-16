@@ -15,4 +15,3 @@ void loop() {
   Serial.print("]");
   delay(100);
 }
-
