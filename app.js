@@ -84,7 +84,7 @@ async.series(
     // Parse options
     _.each(_.pluck(options, 'long'), function (option) {
       if (option === 'serial') {
-        env[option] = env[option].split('\s*,\s*');
+        env[option] = env[option].split(/\s*,\s*/);
       }
     });
 
@@ -133,18 +133,14 @@ function initSerialPorts(server) {
       buffer += data.toString();
       var startIndex = buffer.indexOf('['),
           endIndex = buffer.indexOf(']');
-      if (startIndex >= 0 && endIndex >= 0) {
-        var message = buffer.substring(startIndex + 1, endIndex).split(',');
+      if (0 <= startIndex && startIndex < endIndex) {
+        var values = buffer.substring(startIndex + 1, endIndex).split(/\s*,\s*/);
         buffer = buffer.substring(endIndex + 1);
-        for (var i = message.length - 1; i >= 0; i--) {
-          message[i] = parseInt(message[i]);
-          if (isNaN(message[i])) {
-            console.error('invalid data: ', message);
-            return;
-          }
-        }
-        server.emit('message', { data: message });
-        console.log(portName + ':', message);
+        _.each(values, function (value, index) {
+          values[index] = isNaN(value) ? null : parseInt(value);
+        });
+        server.emit('message', { data: values });
+        console.log(portName, '->', values);
       }
     });
   });
