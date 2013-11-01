@@ -7,6 +7,7 @@
     "cli-table": "0.2.0",
     "commander": "1.1.1",
     "lodash": "2.0.0",
+    "mathjs": "0.14.0",
     "serialport": "1.0.8",
     "socket.io-client": "0.9.16"
   },
