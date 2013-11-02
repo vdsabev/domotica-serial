@@ -193,7 +193,7 @@ function connect() {
                   if (!count) return;
 
                   var average = _.reduce(device.valueBuffer, function (sum, value) { return sum + value }) / count;
-                  server.emit('update:device', { data: { _id: device._id, values: { $push: [new Date(), average] } } }, function (error) {
+                  server.emit('update:device', { data: { _id: device._id, values: [new Date(), average] } }, function (error) {
                     if (error) {
                       console.error(error.stack || error);
                     }
