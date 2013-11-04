@@ -167,7 +167,10 @@ function connect() {
 
       // Find paired devices
       serialport.list(function (error, ports) {
-        server.emit('get:controllers', { data: { 'connected.id': { $in: _.pluck(ports, 'pnpId') }, select: ['_id', 'connected.id'] } }, function (error, res) {
+        server.emit('get:controllers', {
+          data: { 'connected.id': { $in: _.pluck(ports, 'pnpId') } },
+          select: ['_id', 'connected.id']
+        }, function (error, res) {
           next(error);
 
           controllers = _.map(res.data, function (item) {
@@ -178,7 +181,10 @@ function connect() {
             // TODO: Offer to pair some controllers with the available ports
           }
           else {
-            server.emit('get:devices', { data: { controller: { $in: _.pluck(res.data, '_id') }, select: ['_id', 'controller', 'pins', 'converter', { converter: 'formula' }] } }, function (error, res) {
+            server.emit('get:devices', {
+              data: { controller: { $in: _.pluck(res.data, '_id') } },
+              select: ['_id', 'controller', 'pins', 'interval', 'converter', { converter: 'formula' }]
+            }, function (error, res) {
               next(error);
               devices = _.map(res.data, function (item) {
                 return _.extend(item, {
