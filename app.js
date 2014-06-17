@@ -1,7 +1,9 @@
+'use strict';
+
 var _ = require('lodash'),
     async = require('async'),
     io = require('socket.io-client'),
-    math = require('mathjs'),
+    math = require('mathjs')(),
     program = require('commander'),
     serialport = require('serialport'),
     Table = require('cli-table');
@@ -12,7 +14,7 @@ var env = _.defaults({}, process.env, { TZ: 'UTC' });
 // Parse Command Line Arguments
 program.version('0.0.1');
 var options = [
-  { short: 'S', long: 'serial', args: '<ports>', description: 'serial port names (comma-separated, e.g. COM4,COM5)' },
+  { short: 'S', long: 'serial', args: '<ports>', description: 'serial port names (comma-separated, e.g. COM3,COM4)' },
   { short: 'H', long: 'host', args: '<name>', description: 'host name' },
   { short: 'E', long: 'email', args: '<address>', description: 'email address' },
   { short: 'P', long: 'pass', args: '<word>', description: 'password' } // Using "password" for the option name does not work
@@ -32,13 +34,8 @@ _.extend(env, _.pick(program, _.pluck(options, 'long')));
 
 // Prompts are the last means of setting environment variables
 var defaults = {
-  serial: 'COM4',
+  serial: 'COM3',
   host: 'http://localhost:3000'
-};
-
-// Utility functions
-String.prototype.repeat = function (count) {
-  return new Array(count + 1).join(this);
 };
 
 async.series(
@@ -146,7 +143,7 @@ function connect() {
             console.log(portName, '->', values);
 
             _.each(portDevices, function (device) {
-              var func = math.eval('function ' + device.converter.formula);
+              var func = math.eval(device.converter.formula);
               var args = _.values(_.pick(values, _.pluck(device.pins, 'index')));
               var value = func.apply(device, args);
               if (isNaN(value)) {
@@ -173,44 +170,43 @@ function connect() {
         }, function (error, res) {
           next(error);
 
-          controllers = _.map(res.data, function (item) {
+          if (res.data.length === 0) {
+            console.log('No controllers are paired with available serial ports');
+            // TODO: Offer to pair some controllers with available ports
+            return;
+          }
+
+          var controllers = _.map(res.data, function (item) {
             return _.extend(item, { port: _.findWhere(ports, { pnpId: item.connected.id }).comName });
           });
-          if (controllers.length === 0) {
-            console.log('No controllers paired with device', item.connected.id);
-            // TODO: Offer to pair some controllers with the available ports
-          }
-          else {
-            server.emit('get:devices', {
-              data: { controller: { $in: _.pluck(res.data, '_id') } },
-              select: ['_id', 'controller', 'pins', 'interval', 'converter', { converter: 'formula' }]
-            }, function (error, res) {
-              next(error);
-              devices = _.map(res.data, function (item) {
-                return _.extend(item, {
-                  port: _.findWhere(controllers, { _id: item.controller }).port
-                });
-              });
 
-              // Setup value emitters
-              _.each(devices, function (device) {
-                setInterval(function () {
-                  var count = device.valueBuffer && device.valueBuffer.length; // Save for later
-                  if (!count) return;
-
-                  var average = _.reduce(device.valueBuffer, function (sum, value) { return sum + value }) / count;
-                  server.emit('update:device', { data: { _id: device._id, values: [new Date(), average] } }, function (error) {
-                    if (error) {
-                      console.error(error.stack || error);
-                    }
-                    else {
-                      device.valueBuffer = _.rest(device.valueBuffer, count);
-                    }
-                  });
-                }, device.interval);
-              });
+          server.emit('get:devices', {
+            data: { controller: { $in: _.pluck(res.data, '_id') } },
+            select: ['_id', 'controller', 'pins', 'interval', 'converter', { converter: 'formula' }]
+          }, function (error, res) {
+            next(error);
+            devices = _.map(res.data, function (item) {
+              return _.extend(item, { port: _.findWhere(controllers, { _id: item.controller }).port });
             });
-          }
+
+            // Setup value emitters
+            _.each(devices, function (device) {
+              setInterval(function () {
+                var count = device.valueBuffer && device.valueBuffer.length; // Save for later
+                if (!count) return;
+
+                var average = _.reduce(device.valueBuffer, function (sum, value) { return sum + value; }) / count;
+                server.emit('update:device', { data: { _id: device._id, values: [new Date(), average] } }, function (error) {
+                  if (error) {
+                    console.error(error.stack || error);
+                  }
+                  else {
+                    device.valueBuffer = _.rest(device.valueBuffer, count);
+                  }
+                });
+              }, device.interval);
+            });
+          });
         });
       });
     });
